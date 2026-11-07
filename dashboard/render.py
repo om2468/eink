@@ -73,19 +73,18 @@ def _moon(draw: ImageDraw.ImageDraw, cx: int, cy: int, r: int) -> None:
     draw.ellipse((cx - r + offset, cy - r - 2, cx + r + offset, cy + r - 2), fill=WHITE)
 
 
-def _cloud(draw: ImageDraw.ImageDraw, x: int, y: int, w: int, fill=WHITE) -> None:
+def _cloud(draw: ImageDraw.ImageDraw, x: int, y: int, w: int) -> None:
     """Cloud whose top-left is near (x, y)."""
     h = w // 2
-    outline = BLACK
     shapes = [
         (x, y + h * 2 // 5, x + w * 2 // 5, y + h),
         (x + w // 5, y, x + w * 7 // 10, y + h * 4 // 5),
         (x + w // 2, y + h // 4, x + w, y + h),
     ]
     for box in shapes:
-        draw.ellipse(box, fill=fill, outline=outline, width=2)
-    draw.rectangle((x + w // 5, y + h // 2, x + w * 4 // 5, y + h), fill=fill)
-    draw.line((x + w // 5, y + h, x + w * 4 // 5, y + h), fill=outline, width=2)
+        draw.ellipse(box, fill=WHITE, outline=BLACK, width=2)
+    draw.rectangle((x + w // 5, y + h // 2, x + w * 4 // 5, y + h), fill=WHITE)
+    draw.line((x + w // 5, y + h, x + w * 4 // 5, y + h), fill=BLACK, width=2)
 
 
 def _icon(draw: ImageDraw.ImageDraw, x: int, y: int, size: int, code: int, is_day: bool = True) -> None:
@@ -93,7 +92,6 @@ def _icon(draw: ImageDraw.ImageDraw, x: int, y: int, size: int, code: int, is_da
     cloud_w = size * 7 // 8
     cloud_x = x + (size - cloud_w) // 2
     cloud_y = y + size // 5
-    below = cloud_y + cloud_w // 2 + 3
 
     def body(cx: int, cy: int, r: int) -> None:
         (_sun if is_day else _moon)(draw, cx, cy, r)

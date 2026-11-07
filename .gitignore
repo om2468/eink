@@ -2,6 +2,5 @@
 .venv-fw/
 __pycache__/
 .pytest_cache/
-.pio/
 site/
 firmware/src/secrets.h

@@ -14,7 +14,7 @@ import framebuf
 import network
 import ntptime
 import requests
-from header_font import GLYPHS, HEIGHT
+from header_font import GLYPHS, HEIGHT as GLYPH_HEIGHT
 
 PAGE_URL = "https://om2468.github.io/eink/page.bin"
 DEVICE_NAME = b"NRF_EPD_C0DC"
@@ -142,11 +142,11 @@ def _text_width(text):
 
 
 def _text(canvas, text, x):
-    y = (HEADER_HEIGHT - HEIGHT) // 2
+    y = (HEADER_HEIGHT - GLYPH_HEIGHT) // 2
     for c in text:
         width, pixels = GLYPHS[c] if c in GLYPHS else GLYPHS["?"]
         # The extra argument makes unset pixels transparent.
-        canvas.blit(framebuf.FrameBuffer(bytearray(pixels), width, HEIGHT, framebuf.MONO_HLSB), x, y, 0)
+        canvas.blit(framebuf.FrameBuffer(bytearray(pixels), width, GLYPH_HEIGHT, framebuf.MONO_HLSB), x, y, 0)
         x += width
 
 
@@ -317,8 +317,6 @@ class _Display:
         view = memoryview(plane)
         since_ack = 0
         for offset in range(0, PLANE_SIZE, max_chunk):
-            if offset // 5000 != (offset - max_chunk) // 5000:
-                print("eink: red" if is_red else "eink: black/white", offset, "of", PLANE_SIZE)
             flags = (FLAG_RED_PLANE if is_red else 0) | (FLAG_FIRST_CHUNK if offset == 0 else 0)
             packet = bytes((CMD_WRITE_IMAGE, flags)) + view[offset : offset + max_chunk]
             if since_ack >= ack_interval:
