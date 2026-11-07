@@ -1,29 +1,29 @@
 """Draws the dashboard page in pure black, white and red."""
 
 from datetime import datetime
+from pathlib import Path
+from zoneinfo import ZoneInfo
 
 from PIL import Image, ImageDraw, ImageFont
 
 from . import config
-from .data import Weather
+from .data import Share, Weather
 
 BLACK = (0, 0, 0)
 WHITE = (255, 255, 255)
 RED = (255, 0, 0)
 
-FONT_PATH = "/System/Library/Fonts/Helvetica.ttc"
-REGULAR = 0
-BOLD = 1
+FONT_DIR = Path(__file__).parent / "fonts"
+REGULAR = "LiberationSans-Regular.ttf"
+BOLD = "LiberationSans-Bold.ttf"
 
 MARGIN = 10
-HEADER_HEIGHT = 26
-NEWS_TOP = 138
-LINE_HEIGHT = 17
-NEWS_FONT_SIZE = 15
+SHARES_TOP = 142
+SHARE_ROW_HEIGHT = 45
 
 
-def _font(size: int, index: int = REGULAR) -> ImageFont.FreeTypeFont:
-    return ImageFont.truetype(FONT_PATH, size, index=index)
+def _font(size: int, name: str = REGULAR) -> ImageFont.FreeTypeFont:
+    return ImageFont.truetype(FONT_DIR / name, size)
 
 
 def describe(code: int) -> str:
@@ -129,77 +129,81 @@ def _icon(draw: ImageDraw.ImageDraw, x: int, y: int, size: int, code: int, is_da
             draw.line((cx + 2, below, cx - 2, below + size // 6), fill=RED, width=2)
 
 
-def wrap(text: str, font: ImageFont.FreeTypeFont, width: int, max_lines: int) -> list[str]:
-    """Word-wrap text, ending with an ellipsis if it doesn't fit."""
-    lines: list[str] = []
-    words = text.split()
-    while words and len(lines) < max_lines:
-        line = words.pop(0)
-        while words and font.getlength(f"{line} {words[0]}") <= width:
-            line = f"{line} {words.pop(0)}"
-        lines.append(line)
-    if words:
-        last = lines[-1]
-        while last and font.getlength(f"{last}...") > width:
-            last = last.rsplit(" ", 1)[0] if " " in last else last[:-1]
-        lines[-1] = f"{last}..."
-    return lines
-
-
-def _header(draw: ImageDraw.ImageDraw, now: datetime) -> None:
-    draw.rectangle((0, 0, config.WIDTH, HEADER_HEIGHT - 1), fill=BLACK)
-    draw.text((MARGIN, HEADER_HEIGHT // 2), config.LOCATION_NAME, font=_font(16, BOLD), fill=WHITE, anchor="lm")
-    stamp = f"{now:%a} {now.day} {now:%b}, updated {now:%H:%M}"
-    draw.text((config.WIDTH - MARGIN, HEADER_HEIGHT // 2), stamp, font=_font(14), fill=WHITE, anchor="rm")
-
-
 def _weather(draw: ImageDraw.ImageDraw, weather: Weather) -> None:
-    top = HEADER_HEIGHT + 6
+    top = config.HEADER_HEIGHT + 5
     _icon(draw, MARGIN, top + 2, 56, weather.code, weather.is_day)
-    temperature = f"{round(weather.temperature)}°"
+    temperature = f"{round(weather.temperature)}\u00b0"
     big = _font(46, BOLD)
-    draw.text((MARGIN + 62, top - 3), temperature, font=big, fill=BLACK)
+    draw.text((MARGIN + 62, top), temperature, font=big, fill=BLACK)
 
-    x = MARGIN + 62 + int(big.getlength(temperature)) + 10
+    x = MARGIN + 62 + int(big.getlength(temperature)) + 12
     today = weather.days[0]
-    draw.text((x, top + 3), describe(weather.code), font=_font(16, BOLD), fill=BLACK)
-    draw.text((x, top + 22), f"Feels {round(weather.feels_like)}°, wind {round(weather.wind_mph)} mph", font=_font(14), fill=BLACK)
-    draw.text((x, top + 39), f"High {round(today.high)}°  Low {round(today.low)}°  Rain {today.rain_chance}%", font=_font(14), fill=BLACK)
+    small = _font(14)
+    draw.text((x, top), describe(weather.code), font=_font(16, BOLD), fill=BLACK)
+    draw.text((x, top + 18), f"Feels {round(weather.feels_like)}\u00b0, wind {round(weather.wind_mph)} mph", font=small, fill=BLACK)
+    draw.text((x, top + 34), f"High {round(today.high)}\u00b0  Low {round(today.low)}\u00b0  Rain {today.rain_chance}%", font=small, fill=BLACK)
+    draw.text((x, top + 50), f"Sunset {weather.sunset:%H:%M}", font=small, fill=BLACK)
 
-    # Next three days.
-    strip_top = top + 60
-    forecast = weather.days[1:4]
-    column = (config.WIDTH - 2 * MARGIN) // max(len(forecast), 1)
+    # Next five days.
+    strip_top = top + 72
+    forecast = weather.days[1:]
+    column = (config.WIDTH - 2 * MARGIN) // len(forecast)
     for i, day in enumerate(forecast):
         cx = MARGIN + column * i
         _icon(draw, cx, strip_top + 1, 28, day.code)
-        draw.text((cx + 32, strip_top), f"{day.date:%a}", font=_font(13, BOLD), fill=BLACK)
-        draw.text((cx + 32, strip_top + 15), f"{round(day.high)}°/{round(day.low)}°", font=_font(13), fill=BLACK)
+        draw.text((cx + 30, strip_top), f"{day.date:%a}", font=_font(13, BOLD), fill=BLACK)
+        draw.text((cx + 30, strip_top + 15), f"{round(day.high)}/{round(day.low)}\u00b0", font=_font(13), fill=BLACK)
 
 
-def _news(draw: ImageDraw.ImageDraw, headlines: list[str]) -> None:
-    draw.line((MARGIN, NEWS_TOP, config.WIDTH - MARGIN, NEWS_TOP), fill=RED, width=2)
-    draw.text((MARGIN, NEWS_TOP + 4), config.NEWS_LABEL.upper(), font=_font(13, BOLD), fill=RED)
+def _shares(draw: ImageDraw.ImageDraw, shares: list[Share], now: datetime) -> None:
+    draw.line((MARGIN, SHARES_TOP, config.WIDTH - MARGIN, SHARES_TOP), fill=RED, width=2)
+    draw.text((MARGIN, SHARES_TOP + 4), "SHARES", font=_font(13, BOLD), fill=RED)
 
-    font = _font(NEWS_FONT_SIZE)
-    bullet_indent = 10
-    y = NEWS_TOP + 21
-    for headline in headlines:
-        lines = wrap(headline, font, config.WIDTH - 2 * MARGIN - bullet_indent, max_lines=2)
-        if y + LINE_HEIGHT * len(lines) > config.HEIGHT - 2:
-            break
-        draw.rectangle((MARGIN, y + 6, MARGIN + 3, y + 9), fill=RED)
-        for line in lines:
-            draw.text((MARGIN + bullet_indent, y), line, font=font, fill=BLACK)
-            y += LINE_HEIGHT
-        y += 3
+    # Two times, so stale data is visible: when the market last traded, and when
+    # this page was drawn.
+    uk = ZoneInfo(config.TIMEZONE)
+    traded = max(share.market_time for share in shares).astimezone(uk)
+    note = f"last trade {traded:%a %H:%M}, page drawn {now:%H:%M}"
+    draw.text((config.WIDTH - MARGIN, SHARES_TOP + 4), note, font=_font(12), fill=BLACK, anchor="ra")
+
+    price_right = 300
+    change_right = config.WIDTH - MARGIN
+    y = SHARES_TOP + 21
+    for share in shares:
+        draw.text((MARGIN, y + 1), share.name, font=_font(17, BOLD), fill=BLACK)
+        draw.text((MARGIN, y + 21), f"{share.ticker} ({share.currency})", font=_font(12), fill=BLACK)
+        draw.text((price_right, y + 3), f"{share.price:,.2f}", font=_font(27, BOLD), fill=BLACK, anchor="ra")
+        change = share.change_percent
+        draw.text(
+            (change_right, y + 8),
+            f"{change:+.1f}%",
+            font=_font(19, BOLD),
+            fill=RED if change < 0 else BLACK,
+            anchor="ra",
+        )
+        y += SHARE_ROW_HEIGHT
 
 
-def render(weather: Weather, headlines: list[str], now: datetime) -> Image.Image:
+def render(weather: Weather, shares: list[Share], now: datetime) -> Image.Image:
+    """Draws the page, leaving a blank black band for the ESP32's header."""
     image = Image.new("RGB", (config.WIDTH, config.HEIGHT), WHITE)
     draw = ImageDraw.Draw(image)
     draw.fontmode = "1"  # No anti-aliasing: the panel has no greys.
-    _header(draw, now)
+    draw.rectangle((0, 0, config.WIDTH, config.HEADER_HEIGHT - 1), fill=BLACK)
     _weather(draw, weather)
-    _news(draw, headlines)
+    _shares(draw, shares, now)
     return image
+
+
+def with_sample_header(page: Image.Image, now: datetime) -> Image.Image:
+    """Approximates the ESP32's header, for preview.png only."""
+    preview = page.copy()
+    draw = ImageDraw.Draw(preview)
+    draw.fontmode = "1"
+    font = _font(15, BOLD)
+    middle = config.HEADER_HEIGHT // 2
+    new_york = now.astimezone(ZoneInfo("America/New_York"))
+    draw.text((8, middle), f"{now:%a} {now.day} {now:%b}  UK {now:%H:%M}", font=font, fill=WHITE, anchor="lm")
+    draw.text((282, middle), f"NY {new_york:%H:%M}", font=font, fill=WHITE, anchor="rm")
+    draw.text((392, middle), "Batt 2.9V", font=font, fill=WHITE, anchor="rm")
+    return preview

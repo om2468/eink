@@ -1,41 +1,33 @@
-"""Fetch weather and news, draw the page and send it to the display.
+"""Fetches the data and writes the page for the ESP32 to download.
 
-    python -m dashboard            # update the display
-    python -m dashboard --dry-run  # only write the preview image
+    python -m dashboard
+
+Writes site/page.bin, the page in the panel's format, and site/preview.png.
+If a fetch fails this exits with an error and writes nothing, so the last
+published page stays in place.
 """
 
-import argparse
-import asyncio
 import sys
 from datetime import datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from . import config
-from .data import fetch_headlines, fetch_weather
-from .display import send_image
-from .render import render
+from .data import fetch_shares, fetch_weather
+from .encode import encode_planes
+from .render import render, with_sample_header
 
-PREVIEW_PATH = Path(__file__).resolve().parent.parent / "preview.png"
+SITE = Path(__file__).resolve().parent.parent / "site"
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--dry-run", action="store_true", help="write preview.png without using Bluetooth")
-    args = parser.parse_args()
-
     now = datetime.now(ZoneInfo(config.TIMEZONE))
-    # If a fetch fails, this exits before touching the display, so the previous
-    # page stays on screen rather than a partial one.
-    image = render(fetch_weather(), fetch_headlines(), now)
-    image.save(PREVIEW_PATH)
-    print(f"{now:%Y-%m-%d %H:%M} wrote {PREVIEW_PATH}", flush=True)
+    page = render(fetch_weather(), fetch_shares(), now)
 
-    if args.dry_run:
-        return 0
-
-    asyncio.run(send_image(image))
-    print(f"{now:%Y-%m-%d %H:%M} sent to {config.DEVICE_NAME}", flush=True)
+    SITE.mkdir(exist_ok=True)
+    (SITE / "page.bin").write_bytes(encode_planes(page))
+    with_sample_header(page, now).save(SITE / "preview.png")
+    print(f"{now:%Y-%m-%d %H:%M} wrote {SITE}")
     return 0
 
 

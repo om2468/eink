@@ -1,5 +1,7 @@
 .venv/
+.venv-fw/
 __pycache__/
 .pytest_cache/
-preview.png
-logs/
+.pio/
+site/
+firmware/src/secrets.h

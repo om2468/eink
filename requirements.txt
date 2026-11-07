@@ -1,3 +1,2 @@
-bleak
 pillow
 pytest

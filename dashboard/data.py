@@ -1,16 +1,17 @@
-"""Fetches the forecast and headlines."""
+"""Fetches the forecast and share prices."""
 
 import json
 import urllib.parse
 import urllib.request
-import xml.etree.ElementTree as ET
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime, timezone
 
 from . import config
 
-USER_AGENT = "eink-dashboard/1.0"
+# Yahoo refuses requests without a browser-like user agent.
+USER_AGENT = "Mozilla/5.0"
 TIMEOUT_SECONDS = 20
+FORECAST_DAYS = 6  # Today plus the five days shown.
 
 
 @dataclass
@@ -29,13 +30,28 @@ class Weather:
     code: int
     wind_mph: float
     is_day: bool
+    sunset: datetime
     days: list[Day]
 
 
-def _get(url: str) -> bytes:
+@dataclass
+class Share:
+    name: str
+    ticker: str
+    currency: str
+    price: float
+    previous_close: float
+    market_time: datetime
+
+    @property
+    def change_percent(self) -> float:
+        return (self.price - self.previous_close) / self.previous_close * 100
+
+
+def _get_json(url: str) -> dict:
     request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
     with urllib.request.urlopen(request, timeout=TIMEOUT_SECONDS) as response:
-        return response.read()
+        return json.loads(response.read())
 
 
 def fetch_weather() -> Weather:
@@ -44,13 +60,13 @@ def fetch_weather() -> Weather:
             "latitude": config.LATITUDE,
             "longitude": config.LONGITUDE,
             "current": "temperature_2m,apparent_temperature,weather_code,wind_speed_10m,is_day",
-            "daily": "weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max",
+            "daily": "weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,sunset",
             "wind_speed_unit": "mph",
             "timezone": config.TIMEZONE,
-            "forecast_days": 4,
+            "forecast_days": FORECAST_DAYS,
         }
     )
-    body = json.loads(_get(f"https://api.open-meteo.com/v1/forecast?{query}"))
+    body = _get_json(f"https://api.open-meteo.com/v1/forecast?{query}")
     current = body["current"]
     daily = body["daily"]
     days = [
@@ -69,21 +85,26 @@ def fetch_weather() -> Weather:
         code=current["weather_code"],
         wind_mph=current["wind_speed_10m"],
         is_day=bool(current["is_day"]),
+        sunset=datetime.fromisoformat(daily["sunset"][0]),
         days=days,
     )
 
 
-def parse_headlines(feed: bytes) -> list[str]:
-    titles = []
-    for item in ET.fromstring(feed).iter("item"):
-        title = (item.findtext("title") or "").strip()
-        if title and title not in titles:
-            titles.append(title)
-    return titles
+def parse_share(name: str, body: dict) -> Share:
+    meta = body["chart"]["result"][0]["meta"]
+    return Share(
+        name=name,
+        ticker=meta["symbol"],
+        currency=meta["currency"],
+        price=meta["regularMarketPrice"],
+        previous_close=meta["chartPreviousClose"],
+        market_time=datetime.fromtimestamp(meta["regularMarketTime"], timezone.utc),
+    )
 
 
-def fetch_headlines() -> list[str]:
-    headlines = parse_headlines(_get(config.NEWS_FEED_URL))
-    if not headlines:
-        raise ValueError(f"no headlines in {config.NEWS_FEED_URL}")
-    return headlines
+def fetch_shares() -> list[Share]:
+    shares = []
+    for name, ticker in config.SHARES:
+        url = f"https://query1.finance.yahoo.com/v8/finance/chart/{urllib.parse.quote(ticker)}?range=1d&interval=1d"
+        shares.append(parse_share(name, _get_json(url)))
+    return shares
