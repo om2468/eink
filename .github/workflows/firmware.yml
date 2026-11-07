@@ -1,0 +1,44 @@
+name: Build firmware
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "firmware/**"
+      - ".github/workflows/firmware.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install platformio esptool
+      - name: Compile
+        working-directory: firmware
+        run: |
+          if ! pio run > build.log 2>&1; then
+            tail -30 build.log
+            grep -E "error:|Error " build.log | head -20 | sed 's/^/::error::/'
+            exit 1
+          fi
+          tail -8 build.log
+      - name: Merge into one file
+        working-directory: firmware/.pio/build/display
+        run: |
+          boot_app0=$(find ~/.platformio/packages/framework-arduinoespressif32 -name boot_app0.bin | head -1)
+          esptool --chip esp32s3 merge-bin -o firmware-merged.bin \
+            0x0 bootloader.bin 0x8000 partitions.bin 0xe000 "$boot_app0" 0x10000 firmware.bin
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete firmware-latest --yes --cleanup-tag || true
+          gh release create firmware-latest firmware/.pio/build/display/firmware-merged.bin \
+            --title "Latest firmware" --notes "Built from ${{ github.sha }}. Contains no Wi-Fi details."

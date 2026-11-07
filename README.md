@@ -15,7 +15,7 @@ GitHub Actions (:25 and :55)            ESP32-S3 (:00 and :30, 08:00-19:00 UK)  
 
 - [dashboard/](dashboard/): draws the page. Location and share list are in [dashboard/config.py](dashboard/config.py).
 - [.github/workflows/publish.yml](.github/workflows/publish.yml): runs it on a schedule and publishes to GitHub Pages.
-- [firmware/](firmware/): the ESP32 program.
+- [firmware/](firmware/): the ESP32 program, compiled by [.github/workflows/firmware.yml](.github/workflows/firmware.yml).
 
 The ESP32 draws the top bar because the battery reading comes from the display, and so the times stay right if a GitHub run starts late.
 
@@ -36,16 +36,22 @@ python3 -m venv .venv
 
 ### 2. Flash the ESP32
 
+GitHub Actions compiles the firmware, so no toolchain is needed locally. It's published without Wi-Fi details at the `firmware-latest` release.
+
 ```sh
 cp firmware/src/secrets.h.example firmware/src/secrets.h  # then add your Wi-Fi details
 python3 -m venv .venv-fw
-.venv-fw/bin/pip install platformio
-cd firmware
-../.venv-fw/bin/pio run -t upload
-../.venv-fw/bin/pio device monitor  # logs; type u to force an update
+.venv-fw/bin/pip install esptool pyserial
+
+PORT=/dev/cu.usbmodemXXXX
+curl -LO https://github.com/om2468/eink/releases/download/firmware-latest/firmware-merged.bin
+.venv-fw/bin/esptool --port $PORT write-flash 0x0 firmware-merged.bin
+.venv-fw/bin/python scripts/set_wifi.py $PORT  # stores your Wi-Fi details on the board
 ```
 
-`secrets.h` is ignored by git. The board must be on 2.4 GHz Wi-Fi, within Bluetooth range of the display, and on USB power.
+`secrets.h` is ignored by git. The Wi-Fi details stay on the board when firmware is reflashed this way. Send `u` over the serial port at 115200 baud to force an update.
+
+The board must be on 2.4 GHz Wi-Fi, within Bluetooth range of the display, and on USB power.
 
 ## Things to know
 

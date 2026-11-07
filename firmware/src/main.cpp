@@ -2,18 +2,25 @@
 // to the e-ink display over Bluetooth. Runs on the hour and half hour from 08:00
 // to 19:00 UK time. The protocol is documented in the repo's README.
 //
-// Send "u" over the serial port to force an update, for testing.
+// Serial commands, one per line:
+//   u                          force an update, for testing
+//   WIFI <ssid><tab><password> save the Wi-Fi details (see scripts/set_wifi.py)
+//
+// The Wi-Fi details are stored on the board, not in this firmware, because the
+// firmware is compiled and published from a public repo.
 
 #include <Adafruit_GFX.h>
 #include <Arduino.h>
 #include <Fonts/FreeSansBold9pt7b.h>
 #include <HTTPClient.h>
 #include <NimBLEDevice.h>
+#include <Preferences.h>
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
 #include <time.h>
 
-#include "secrets.h"
+static String wifiSsid;
+static String wifiPassword;
 
 static const char* PAGE_URL = "https://om2468.github.io/eink/page.bin";
 static const char* DEVICE_NAME = "NRF_EPD_C0DC";
@@ -70,9 +77,36 @@ static void onNotify(NimBLERemoteCharacteristic*, uint8_t* data, size_t length, 
     xQueueSend(notifications, &item, 0);
 }
 
+static void loadWifiDetails() {
+    Preferences prefs;
+    prefs.begin("wifi", true);
+    wifiSsid = prefs.getString("ssid", "");
+    wifiPassword = prefs.getString("password", "");
+    prefs.end();
+}
+
+static void saveWifiDetails(const String& details) {
+    int tab = details.indexOf('\t');
+    if (tab <= 0) {
+        Serial.println("Expected: WIFI <ssid><tab><password>");
+        return;
+    }
+    Preferences prefs;
+    prefs.begin("wifi", false);
+    prefs.putString("ssid", details.substring(0, tab));
+    prefs.putString("password", details.substring(tab + 1));
+    prefs.end();
+    loadWifiDetails();
+    Serial.println("Wi-Fi details saved");
+}
+
 static bool connectWifi() {
+    if (wifiSsid.isEmpty()) {
+        Serial.println("No Wi-Fi details saved. Run scripts/set_wifi.py");
+        return false;
+    }
     WiFi.mode(WIFI_STA);
-    WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+    WiFi.begin(wifiSsid.c_str(), wifiPassword.c_str());
     for (int i = 0; i < 60 && WiFi.status() != WL_CONNECTED; i++) delay(500);
     if (WiFi.status() != WL_CONNECTED) {
         Serial.println("Wi-Fi connection failed");
@@ -327,6 +361,7 @@ void setup() {
     Serial.begin(115200);
     delay(1000);
     notifications = xQueueCreate(8, sizeof(Notification));
+    loadWifiDetails();
 
     NimBLEDevice::init("");
     NimBLEDevice::setMTU(247);
@@ -339,7 +374,15 @@ void setup() {
 }
 
 void loop() {
-    if (Serial.available() && Serial.read() == 'u') updateWithRetries();
+    if (Serial.available()) {
+        String line = Serial.readStringUntil('\n');
+        line.trim();
+        if (line == "u") {
+            updateWithRetries();
+        } else if (line.startsWith("WIFI ")) {
+            saveWifiDetails(line.substring(5));
+        }
+    }
 
     if (!clockIsSet()) {
         // No clock means no schedule, so keep trying.
