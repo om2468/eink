@@ -16,6 +16,6 @@ SHARES = [
 WIDTH = 400
 HEIGHT = 300
 
-# The ESP32 draws the UK time, New York time and battery over this many rows at
-# the top of the page. Keep in step with HEADER_HEIGHT in firmware/src/main.cpp.
+# The ESP32 draws the date and battery over this many rows at the top of the
+# page. Keep in step with HEADER_HEIGHT in esp32/eink.py.
 HEADER_HEIGHT = 28

@@ -2,22 +2,22 @@
 
 A Bluetooth e-ink calendar repurposed as a dashboard, updated by an ESP32-S3 so no computer needs to be on.
 
-**The page shows:** London weather, a 5-day forecast and today's sunset, the UK and New York times, the display's battery, and Cloudflare, Novo Nordisk and Eli Lilly share prices. It updates every 30 minutes from 08:00 to 19:00 UK time.
+**The page shows:** the date, the display's battery, London weather, a 5-day forecast and today's sunset, and Cloudflare, Novo Nordisk and Eli Lilly share prices with their 1-month highs and lows. It updates every 30 minutes from 08:00 to 19:00 UK time.
 
 ## How it works
 
 ```
 GitHub Actions (:25 and :55)            ESP32-S3 (:00 and :30, 08:00-19:00 UK)         Display
   fetch weather and shares      --->      download page.bin                    --->    show page
-  draw page, publish page.bin             add times and battery
+  draw page, publish page.bin             add date and battery
   to GitHub Pages                         send over Bluetooth, disconnect
 ```
 
 - [dashboard/](dashboard/): draws the page. Location and share list are in [dashboard/config.py](dashboard/config.py).
 - [.github/workflows/publish.yml](.github/workflows/publish.yml): runs it on a schedule and publishes to GitHub Pages.
-- [firmware/](firmware/): the ESP32 program, compiled by [.github/workflows/firmware.yml](.github/workflows/firmware.yml).
+- [esp32/eink.py](esp32/eink.py): the MicroPython updater that runs on the ESP32.
 
-The ESP32 draws the top bar because the battery reading comes from the display, and so the times stay right if a GitHub run starts late.
+The ESP32 draws the top bar because the battery reading comes from the display.
 
 ## Setup
 
@@ -34,32 +34,44 @@ python3 -m venv .venv
 .venv/bin/python -m dashboard  # writes site/page.bin and site/preview.png
 ```
 
-### 2. Flash the ESP32
+### 2. Set up the ESP32
 
-GitHub Actions compiles the firmware, so no toolchain is needed locally. It's published without Wi-Fi details at the `firmware-latest` release.
+The board runs MicroPython 1.29 with Bluetooth, and no compiling or flashing is needed. It shares the board with a mouse wriggler in its `main.py`, and uses that project's Wi-Fi setup (`boot.py`, `wifi.py`, `wifi.json`).
 
 ```sh
-cp firmware/src/secrets.h.example firmware/src/secrets.h  # then add your Wi-Fi details
 python3 -m venv .venv-fw
-.venv-fw/bin/pip install esptool pyserial
+.venv-fw/bin/pip install mpremote
 
 PORT=/dev/cu.usbmodemXXXX
-curl -LO https://github.com/om2468/eink/releases/download/firmware-latest/firmware-merged.bin
-.venv-fw/bin/esptool --port $PORT write-flash 0x0 firmware-merged.bin
-.venv-fw/bin/python scripts/set_wifi.py $PORT  # stores your Wi-Fi details on the board
+.venv-fw/bin/mpremote connect $PORT fs cp esp32/eink.py :eink.py + fs cp esp32/header_font.py :header_font.py
 ```
 
-`secrets.h` is ignored by git. The Wi-Fi details stay on the board when firmware is reflashed this way. Send `u` over the serial port at 115200 baud to force an update.
+Then start it from the board's `main.py`, so it runs in the background:
 
-The board must be on 2.4 GHz Wi-Fi, within Bluetooth range of the display, and on USB power.
+```python
+import eink                       # with the other imports
+asyncio.create_task(eink.run())   # inside main(), with the other tasks
+```
+
+The board's original `main.py` is saved on it as `main_before_eink.py`.
+
+To force an update, stop `main.py` with Ctrl-C in `mpremote connect $PORT`, then run:
+
+```python
+import asyncio, eink; asyncio.run(eink.update())
+```
+
+Press Ctrl-D afterwards to restart. The board must be within Bluetooth range of the display, on 2.4 GHz Wi-Fi, and on a USB cable and port that supply enough power. A poor one causes a restart loop showing `Brownout detector was triggered`.
+
+To change the top bar's font, edit and run [esp32/make_font.py](esp32/make_font.py), then copy the new `header_font.py` to the board.
 
 ## Things to know
 
 - **One connection at a time:** a browser connected to the display blocks the ESP32. Always disconnect at epdiy.cn.
 - **Failures:** if a fetch fails, the last published page stays. If the ESP32 can't update after 3 tries, the old page stays on screen. The share section shows when the page was drawn, so old data is visible.
 - **GitHub schedules:** runs can start late, and GitHub disables scheduled workflows after 60 days without repo activity. If the "page drawn" time stops changing, re-enable the workflow in the Actions tab.
-- **Share prices:** these come from Yahoo Finance's unofficial chart endpoint, which could change or block requests. Novo uses its New York listing (`NVO`) so all prices are in USD. The change is against the previous close.
-- **Times:** the New York time is as of the last update, so it's up to 30 minutes old.
+- **Share prices:** these come from Yahoo Finance's unofficial chart endpoint, which could change or block requests. Novo uses its New York listing (`NVO`) so all prices are in USD. The change is against the previous close. The high and low cover about the last 30 days.
+- **Refresh time:** the three-colour panel takes a while and flashes repeatedly each time it redraws.
 - **Battery:** each update uses power, and 23 updates a day is far more than the calendar's daily redraw. Stripes, garbled text, a white screen or 2.8 V mean it's low; the top bar then shows `LOW`.
 - **Getting the calendar back:** stop the ESP32, then sync from epdiy.cn.
 
@@ -74,7 +86,7 @@ The board must be on 2.4 GHz Wi-Fi, within Bluetooth range of the display, and o
 | Vendor web app | <https://epdiy.cn> |
 | Battery | 3 V, 1.25 plug, or a rechargeable version |
 
-The ESP32 used here is an ESP32-S3 with 16 MB flash and 8 MB PSRAM.
+The ESP32 used here is an ESP32-S3 with 16 MB flash and 8 MB PSRAM. The display reported 3.60 V on 2026-11-07, and that it has 15 image slots.
 
 ### Using the vendor web app
 
@@ -118,7 +130,7 @@ Each write is one command byte followed by its data.
 
 | Byte | Command | Data | Notes |
 |---|---|---|---|
-| `0x01` | Init | optional model ID | Replies `mtu=<n> rle=1` and `t=<time> bat=<mV>`. **Passing a model ID saves it.** |
+| `0x01` | Init | optional model ID | Replies `slots=`, `sid=`, `mtu=<n> rle=1` and `t=<time> bat=<mV>`. **Passing a model ID saves it.** |
 | `0x02` | Clear | optional refresh flag | Switches to picture mode |
 | `0x05` | Refresh | | Shows the sent image and switches to picture mode |
 | `0x06` | Panel sleep | | |
@@ -156,7 +168,7 @@ Between write responses, send `intl` chunks without response (capped at 50, or 1
 | Black | `0` | `1` |
 | Red | `0` | `0` |
 
-**RLE (optional):** each code is either `0x80 | (count - 3)` then the byte, for 3 to 130 repeats, or `count - 1` then that many bytes, for 1 to 128 literals. A code must not be split across chunks. The ESP32 sends uncompressed, which is simpler and quick enough.
+**RLE (optional):** each code is either `0x80 | (count - 3)` then the byte, for 3 to 130 repeats, or `count - 1` then that many bytes, for 1 to 128 literals. A code must not be split across chunks. The ESP32 sends uncompressed, which is simpler and takes only seconds.
 
 ## Sources
 

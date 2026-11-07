@@ -27,9 +27,18 @@ def test_parse_share():
                         "symbol": "NET",
                         "currency": "USD",
                         "regularMarketPrice": 110.0,
-                        "chartPreviousClose": 100.0,
+                        "chartPreviousClose": 50.0,
                         "regularMarketTime": 0,
-                    }
+                    },
+                    "indicators": {
+                        "quote": [
+                            {
+                                "close": [80.0, None, 100.0, 110.0],
+                                "high": [90.0, None, 105.0, 120.0],
+                                "low": [70.0, None, 95.0, 100.0],
+                            }
+                        ]
+                    },
                 }
             ]
         }
@@ -37,12 +46,13 @@ def test_parse_share():
     share = parse_share("Cloudflare", body)
     assert share.ticker == "NET"
     assert share.change_percent == 10.0
+    assert (share.month_high, share.month_low) == (120.0, 70.0)
 
 
 def test_page_has_panel_size_and_blank_header():
     day = Day(date(2026, 11, 7), 61, 11.0, 7.0, 40)
     weather = Weather(8.0, 7.0, 3, 5.0, True, datetime(2026, 11, 7, 16, 23), [day] * 6)
-    share = Share("Eli Lilly", "LLY", "USD", 1354.0, 1364.73, datetime(2026, 11, 7, tzinfo=timezone.utc))
+    share = Share("Eli Lilly", "LLY", "USD", 1354.0, 1364.73, 1400.0, 1200.0, datetime(2026, 11, 7, tzinfo=timezone.utc))
     page = render(weather, [share] * 3, datetime(2026, 11, 7, 10, 30, tzinfo=timezone.utc))
 
     assert page.size == (config.WIDTH, config.HEIGHT)

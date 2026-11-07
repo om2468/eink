@@ -157,7 +157,7 @@ def _weather(draw: ImageDraw.ImageDraw, weather: Weather) -> None:
 
 def _shares(draw: ImageDraw.ImageDraw, shares: list[Share], now: datetime) -> None:
     draw.line((MARGIN, SHARES_TOP, config.WIDTH - MARGIN, SHARES_TOP), fill=RED, width=2)
-    draw.text((MARGIN, SHARES_TOP + 4), "SHARES", font=_font(13, BOLD), fill=RED)
+    draw.text((MARGIN, SHARES_TOP + 4), "SHARES (USD)", font=_font(13, BOLD), fill=RED)
 
     # Two times, so stale data is visible: when the market last traded, and when
     # this page was drawn.
@@ -171,8 +171,9 @@ def _shares(draw: ImageDraw.ImageDraw, shares: list[Share], now: datetime) -> No
     y = SHARES_TOP + 21
     for share in shares:
         draw.text((MARGIN, y + 1), share.name, font=_font(17, BOLD), fill=BLACK)
-        draw.text((MARGIN, y + 21), f"{share.ticker} ({share.currency})", font=_font(12), fill=BLACK)
-        draw.text((price_right, y + 3), f"{share.price:,.2f}", font=_font(27, BOLD), fill=BLACK, anchor="ra")
+        month = f"1M high {share.month_high:,.2f}  low {share.month_low:,.2f}"
+        draw.text((MARGIN, y + 22), month, font=_font(13), fill=BLACK)
+        draw.text((price_right, y + 4), f"{share.price:,.2f}", font=_font(24, BOLD), fill=BLACK, anchor="ra")
         change = share.change_percent
         draw.text(
             (change_right, y + 8),
@@ -202,8 +203,6 @@ def with_sample_header(page: Image.Image, now: datetime) -> Image.Image:
     draw.fontmode = "1"
     font = _font(15, BOLD)
     middle = config.HEADER_HEIGHT // 2
-    new_york = now.astimezone(ZoneInfo("America/New_York"))
-    draw.text((8, middle), f"{now:%a} {now.day} {now:%b}  UK {now:%H:%M}", font=font, fill=WHITE, anchor="lm")
-    draw.text((282, middle), f"NY {new_york:%H:%M}", font=font, fill=WHITE, anchor="rm")
+    draw.text((8, middle), f"{config.LOCATION_NAME}  {now:%a} {now.day} {now:%b}", font=font, fill=WHITE, anchor="lm")
     draw.text((392, middle), "Batt 2.9V", font=font, fill=WHITE, anchor="rm")
     return preview

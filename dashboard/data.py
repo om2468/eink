@@ -41,6 +41,8 @@ class Share:
     currency: str
     price: float
     previous_close: float
+    month_high: float
+    month_low: float
     market_time: datetime
 
     @property
@@ -91,13 +93,20 @@ def fetch_weather() -> Weather:
 
 
 def parse_share(name: str, body: dict) -> Share:
-    meta = body["chart"]["result"][0]["meta"]
+    result = body["chart"]["result"][0]
+    meta = result["meta"]
+    quote = result["indicators"]["quote"][0]
+    # Days can be null, such as a day with no trades yet.
+    closes = [value for value in quote["close"] if value is not None]
     return Share(
         name=name,
         ticker=meta["symbol"],
         currency=meta["currency"],
         price=meta["regularMarketPrice"],
-        previous_close=meta["chartPreviousClose"],
+        # With a one-month range, meta's previous close is from a month ago.
+        previous_close=closes[-2],
+        month_high=max(value for value in quote["high"] if value is not None),
+        month_low=min(value for value in quote["low"] if value is not None),
         market_time=datetime.fromtimestamp(meta["regularMarketTime"], timezone.utc),
     )
 
@@ -105,6 +114,6 @@ def parse_share(name: str, body: dict) -> Share:
 def fetch_shares() -> list[Share]:
     shares = []
     for name, ticker in config.SHARES:
-        url = f"https://query1.finance.yahoo.com/v8/finance/chart/{urllib.parse.quote(ticker)}?range=1d&interval=1d"
+        url = f"https://query1.finance.yahoo.com/v8/finance/chart/{urllib.parse.quote(ticker)}?range=1mo&interval=1d"
         shares.append(parse_share(name, _get_json(url)))
     return shares
