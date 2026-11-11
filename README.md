@@ -177,4 +177,4 @@ Between write responses, send `intl` chunks without response (capped at 50, or 1
 - The vendor's printed user guide
 - Direct inspection of the device on 2026-11-07
 - Data: [Open-Meteo](https://open-meteo.com/) and Yahoo Finance
-- Fonts: [Liberation Sans](https://github.com/liberationfonts/liberation-fonts) (SIL Open Font License)
+- Fonts: [Liberation Sans](https://github.com/liberationfonts/liberation-fonts) and, for small text, [Terminus TTF](https://files.ax86.net/terminus-ttf/) (both SIL Open Font License)

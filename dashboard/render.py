@@ -16,6 +16,10 @@ RED = (255, 0, 0)
 FONT_DIR = Path(__file__).parent / "fonts"
 REGULAR = "LiberationSans-Regular.ttf"
 BOLD = "LiberationSans-Bold.ttf"
+# Pixel font for small text, where Liberation Sans goes lumpy without greys.
+# Use it only at 12 or 14, the sizes its bitmaps were drawn for.
+SMALL = "Terminus-Regular.ttf"
+SMALL_BOLD = "Terminus-Bold.ttf"
 
 MARGIN = 10
 SHARES_TOP = 142
@@ -136,7 +140,7 @@ def _weather(draw: ImageDraw.ImageDraw, weather: Weather) -> None:
 
     x = MARGIN + 62 + int(big.getlength(temperature)) + 12
     today = weather.days[0]
-    small = _font(14)
+    small = _font(14, SMALL)
     draw.text((x, top), describe(weather.code), font=_font(16, BOLD), fill=BLACK)
     draw.text((x, top + 18), f"Feels {round(weather.feels_like)}\u00b0, wind {round(weather.wind_mph)} mph", font=small, fill=BLACK)
     draw.text((x, top + 34), f"High {round(today.high)}\u00b0  Low {round(today.low)}\u00b0  Rain {today.rain_chance}%", font=small, fill=BLACK)
@@ -149,8 +153,8 @@ def _weather(draw: ImageDraw.ImageDraw, weather: Weather) -> None:
     for i, day in enumerate(forecast):
         cx = MARGIN + column * i
         _icon(draw, cx, strip_top + 1, 28, day.code)
-        draw.text((cx + 30, strip_top), f"{day.date:%a}", font=_font(13, BOLD), fill=BLACK)
-        draw.text((cx + 30, strip_top + 15), f"{round(day.high)}/{round(day.low)}\u00b0", font=_font(13), fill=BLACK)
+        draw.text((cx + 30, strip_top), f"{day.date:%a}", font=_font(12, SMALL_BOLD), fill=BLACK)
+        draw.text((cx + 30, strip_top + 15), f"{round(day.high)}/{round(day.low)}\u00b0", font=_font(12, SMALL), fill=BLACK)
 
 
 def _shares(draw: ImageDraw.ImageDraw, shares: list[Share], now: datetime) -> None:
@@ -162,7 +166,7 @@ def _shares(draw: ImageDraw.ImageDraw, shares: list[Share], now: datetime) -> No
     uk = ZoneInfo(config.TIMEZONE)
     traded = max(share.market_time for share in shares).astimezone(uk)
     note = f"last trade {traded:%a %H:%M}, page drawn {now:%H:%M}"
-    draw.text((config.WIDTH - MARGIN, SHARES_TOP + 4), note, font=_font(12), fill=BLACK, anchor="ra")
+    draw.text((config.WIDTH - MARGIN, SHARES_TOP + 4), note, font=_font(12, SMALL), fill=BLACK, anchor="ra")
 
     price_right = 300
     change_right = config.WIDTH - MARGIN
@@ -170,7 +174,7 @@ def _shares(draw: ImageDraw.ImageDraw, shares: list[Share], now: datetime) -> No
     for share in shares:
         draw.text((MARGIN, y + 1), share.name, font=_font(17, BOLD), fill=BLACK)
         month = f"1M high {share.month_high:,.2f}  low {share.month_low:,.2f}"
-        draw.text((MARGIN, y + 22), month, font=_font(13), fill=BLACK)
+        draw.text((MARGIN, y + 22), month, font=_font(12, SMALL), fill=BLACK)
         draw.text((price_right, y + 4), f"{share.price:,.2f}", font=_font(24, BOLD), fill=BLACK, anchor="ra")
         change = share.change_percent
         draw.text(
