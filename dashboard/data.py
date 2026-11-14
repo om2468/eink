@@ -1,6 +1,7 @@
 """Fetches the forecast and share prices."""
 
 import json
+import time
 import urllib.parse
 import urllib.request
 from dataclasses import dataclass
@@ -11,6 +12,8 @@ from . import config
 # Yahoo refuses requests without a browser-like user agent.
 USER_AGENT = "Mozilla/5.0"
 TIMEOUT_SECONDS = 20
+ATTEMPTS = 3
+RETRY_DELAY_SECONDS = 15
 FORECAST_DAYS = 6  # Today plus the five days shown.
 
 
@@ -51,9 +54,16 @@ class Share:
 
 
 def _get_json(url: str) -> dict:
+    # The data sources occasionally fail for a moment, so try a few times.
     request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
-    with urllib.request.urlopen(request, timeout=TIMEOUT_SECONDS) as response:
-        return json.loads(response.read())
+    for attempt in range(ATTEMPTS):
+        try:
+            with urllib.request.urlopen(request, timeout=TIMEOUT_SECONDS) as response:
+                return json.loads(response.read())
+        except (OSError, ValueError):
+            if attempt == ATTEMPTS - 1:
+                raise
+            time.sleep(RETRY_DELAY_SECONDS)
 
 
 def fetch_weather() -> Weather:

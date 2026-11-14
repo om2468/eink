@@ -31,9 +31,16 @@ jobs:
           python-version: "3.12"
       - run: pip install -r requirements.txt
       - run: python -m pytest -q
-      - run: python -m dashboard
-      - uses: actions/upload-pages-artifact@v3
+      # If the data still can't be fetched, skip publishing without failing the
+      # run, so there's no failure email. The display keeps the last page, and
+      # its "page drawn" time shows how old that is.
+      - id: draw
+        run: python -m dashboard
+        continue-on-error: true
+      - if: steps.draw.outcome == 'success'
+        uses: actions/upload-pages-artifact@v3
         with:
           path: site
       - id: deploy
+        if: steps.draw.outcome == 'success'
         uses: actions/deploy-pages@v4

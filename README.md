@@ -68,7 +68,7 @@ To change the top bar's font, edit and run [esp32/make_font.py](esp32/make_font.
 ## Things to know
 
 - **One connection at a time:** a browser connected to the display blocks the ESP32. Always disconnect at epdiy.cn.
-- **Failures:** if a fetch fails, the last published page stays. If the ESP32 can't update after 3 tries, the old page stays on screen. The share section shows when the page was drawn, so old data is visible.
+- **Failures:** fetches are retried 3 times. If they still fail, the run skips publishing without failing, so GitHub sends no email, and the last published page stays. If the ESP32 can't update after 3 tries, the old page stays on screen. The share section shows when the page was drawn, so old data is visible.
 - **GitHub schedules:** runs can start late, and GitHub disables scheduled workflows after 60 days without repo activity. If the "page drawn" time stops changing, re-enable the workflow in the Actions tab.
 - **Share prices:** these come from Yahoo Finance's unofficial chart endpoint, which could change or block requests. Novo uses its New York listing (`NVO`) so all prices are in USD. The change is against the previous close. The high and low cover about the last 30 days.
 - **Refresh time:** the three-colour panel takes a while and flashes repeatedly each time it redraws.
